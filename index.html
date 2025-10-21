@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TaskMind - Implementation Test</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background-color: #f4f4f9; display: flex; justify-content: center; padding-top: 40px; }
+        .container { background: #ffffff; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); width: 100%; max-width: 400px; }
+        h2 { text-align: center; color: #333; }
+        .form-group { margin-bottom: 1rem; }
+        label { display: block; margin-bottom: 0.5rem; color: #555; font-weight: 500; }
+        input { width: 100%; padding: 0.75rem; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        button { width: 100%; padding: 0.75rem; background-color: #007bff; color: white; border: none; border-radius: 4px; font-size: 1rem; cursor: pointer; transition: background-color 0.2s; }
+        button:hover { background-color: #0056b3; }
+        hr { border: 0; border-top: 1px solid #eee; margin: 2rem 0; }
+        .message { text-align: center; margin-top: 1rem; font-weight: 500; padding: 10px; border-radius: 4px; }
+        .message.success { color: green; background-color: #e0f8e0; }
+        .message.error { color: red; background-color: #f8e0e0; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <form id="signupForm">
+            <h2>User.signUp()</h2>
+            <div class="form-group">
+                <label for="fullName">Full Name</label>
+                <input type="text" id="fullName" required>
+            </div>
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input type="email" id="email" required>
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" required>
+            </div>
+            <button type="submit">Create Account</button>
+            <div id="signupMessage" class="message" style="display:none;"></div>
+        </form>
+
+        <hr>
+
+        <form id="taskForm">
+            <h2>User.createTask()</h2>
+            <div class="form-group">
+                <label for="taskTitle">Task Title</label>
+                <input type="text" id="taskTitle" required>
+            </div>
+            <div class="form-group">
+                <label for="userId">Your User ID</label>
+                <input type="number" id="userId" placeholder="Enter ID from successful signup" required>
+            </div>
+            <button type="submit">Add Task</button>
+            <div id="taskMessage" class="message" style="display:none;"></div>
+        </form>
+    </div>
+
+    <script>
+        // The URL of our backend server
+        const API_URL = 'http://localhost:3001';
+
+        // --- Logic for Sign Up Form ---
+        const signupForm = document.getElementById('signupForm');
+        const signupMessage = document.getElementById('signupMessage');
+
+        signupForm.addEventListener('submit', async (event) => {
+            event.preventDefault(); // Stop the page from reloading
+            
+            // Get data from the form
+            const data = {
+                fullName: document.getElementById('fullName').value,
+                email: document.getElementById('email').value,
+                password: document.getElementById('password').value
+            };
+
+            // Send data to the backend
+            const response = await fetch(`${API_URL}/signup`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+
+            const result = await response.json();
+            signupMessage.style.display = 'block';
+
+            if (response.ok) {
+                signupMessage.textContent = `${result.message} Your new User ID is: ${result.userId}`;
+                signupMessage.className = 'message success';
+                // Automatically fill the User ID in the next form
+                document.getElementById('userId').value = result.userId;
+            } else {
+                signupMessage.textContent = `${result.message}`;
+                signupMessage.className = 'message error';
+            }
+        });
+
+        // --- Logic for Task Creation Form ---
+        const taskForm = document.getElementById('taskForm');
+        const taskMessage = document.getElementById('taskMessage');
+
+        taskForm.addEventListener('submit', async (event) => {
+            event.preventDefault();
+
+            const data = {
+                title: document.getElementById('taskTitle').value,
+                owner_user_id: parseInt(document.getElementById('userId').value)
+            };
+
+            // Send data to the backend
+            const response = await fetch(`${API_URL}/tasks`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+
+            const result = await response.json();
+            taskMessage.style.display = 'block';
+
+            if (response.ok) {
+                taskMessage.textContent = `${result.message} Task ID: ${result.taskId}`;
+                taskMessage.className = 'message success';
+            } else {
+                taskMessage.textContent = `${result.message}`;
+                taskMessage.className = 'message error';
+            }
+        });
+    </script>
+</body>
+</html>
