@@ -1,62 +1,69 @@
-# TaskMind - Sprint 3 Implementation (Section 4.1)
+# TaskMind - Project Implementation
+
+This project contains the backend logic and frontend GUI for the TaskMind application, demonstrating core user management, task management, event scheduling, and AI features.
 
 ## 1. Overview of Software and Frameworks
-This project implements the core backend logic and a frontend GUI for the TaskMind application.
-
-* **Programming Language:** JavaScript (for both frontend and backend)
-* **Backend (Logic):** Node.js with the Express.js framework.
-* **Frontend (GUI):** HTML, CSS, and plain JavaScript (using the Fetch API).
-* **Database:** MySQL 8.0, hosted on Amazon Web Services (AWS) RDS.
-* **Libraries:**
-    * `mysql2`: To connect Node.js to our MySQL database.
-    * `bcryptjs`: To securely hash and protect user passwords.
-    * `cors`: To allow the frontend and backend to communicate.
-    * `dotenv`: To manage our secret database credentials.
+* **Programming Language:** JavaScript (Frontend & Backend)
+* **Backend (Logic):** Node.js with Express.js
+* **Frontend (GUI):** HTML, CSS, plain JavaScript (Fetch API)
+* **Database:** MySQL 8.0 on AWS RDS
+* **AI:** Google Gemini API (`@google/genai`)
+* **Key Libraries:** `mysql2`, `bcryptjs`, `cors`, `dotenv`, `date-fns`
 
 ## 2. Implemented Use Cases
-We successfully implemented the following two major use cases from our class diagram:
+* **User Management:**
+    * `User.signUp()`: Account creation with password hashing and default calendar generation.
+    * `User.logIn()`: Secure user login.
+* **Task Management:**
+    * `User.createTask()`: Manual task creation.
+    * Displaying user's tasks (including subtasks).
+    * Updating task status (e.g., mark as done).
+    * Deleting tasks (checks for subtasks).
+* **Event Management:**
+    * Manual event creation.
+    * Displaying user's events (sorted chronologically).
+    * Deleting events.
+* **AI Features:**
+    * `AI Quick Add`: Parsing natural language input (e.g., "Meeting tomorrow at 10 am and Prep slides") to create both events and tasks automatically using Gemini.
+    * `AI Task Decomposition`: Breaking down a complex task into smaller subtasks using Gemini.
 
-1.  **User.signUp()**: A new user can be created from the frontend, securely hashed, and stored in the `users` table.
-2.  **User.createTask()**: A new task can be created from the frontend and stored in the `tasks` table, linked to its `owner_user_id`.
-
-## 3. Proof of Database Communication
-The following screenshots demonstrate that data flows from the frontend GUI to the backend database tables.
-
-*(Insert your screenshots here)*
-1.  **Screenshot of the webpage** showing the success messages for creating a user and a task.
-2.  **Screenshot from DBeaver** showing the new user in the `users` table (from `SELECT * FROM users;`).
-3.  **Screenshot from DBeaver** showing the new task in the `tasks` table (from `SELECT * FROM tasks;`).
-
-## 4. How to Compile and Run
+## 3. How to Compile and Run
 These instructions are for running the application from the command line.
 
 ### Prerequisites
-* Node.js (LTS version) must be installed.
-* A MySQL database must be running and accessible.
+* Node.js (LTS version) installed.
+* Access to the MySQL database (AWS RDS) and its credentials.
+* A Google Gemini API Key.
 
 ### Setup
-1.  Unzip the `TaskMind_Implementation.zip` file.
-2.  Open a terminal and navigate into the project folder: `cd taskmind-project`
-3.  Create a file named `.env` in the root of this folder.
-4.  Add your database credentials to the `.env` file in this format:
+1.  Clone or download the project folder.
+2.  Open a terminal and navigate into the `taskmind-project` folder: `cd taskmind-project`
+3.  Create a file named `.env` in this folder.
+4.  Add your database and AI credentials to the `.env` file:
     ```
     DB_HOST=your_database_host_endpoint
     DB_USER=your_database_username
     DB_PASSWORD=your_database_password
     DB_DATABASE=taskmind_db
+    GEMINI_API_KEY=your_google_gemini_api_key
     ```
-5.  Install all required project libraries by running:
-    ```
+5.  Install required libraries:
+    ```bash
     npm install
     ```
 
 ### Running the Application
-1.  **Start the Backend Server:** In your terminal, run:
-    ```
+1.  **Start Backend:** In the terminal, run:
+    ```bash
     node server.js
     ```
-    (A confirmation message will appear: `✅ Backend server is running on http://localhost:3001`)
+    (Look for `✅ Backend server running...`)
+2.  **Launch Frontend:** In your file explorer, double-click `index.html` (or use VS Code's "Open with Live Server").
 
-2.  **Launch the Frontend GUI:** In your file explorer, double-click the `index.html` file to open it in any web browser.
-
-3.  **Test:** You can now use the forms to create users and tasks, and verify the new data appears in your database.
+### Testing
+1.  Go to the Sign Up page, create a new user.
+2.  Log in with the new user.
+3.  Use the forms to manually create tasks and events. Test marking tasks complete and deleting items.
+4.  Use the "Natural Language Quick Add" bar (e.g., "Team sync next Monday at 1pm for 1 hour and create agenda task"). Verify event and task appear.
+5.  Create a complex task (e.g., "Organize team retreat"). Click the ✨ button next to it. Verify subtasks appear.
+6.  Check your database (using DBeaver, etc.) to confirm data persistence.
