@@ -1,4 +1,4 @@
-# TaskMind - Project Implementation
+# TaskMind - Project Implementation !
 
 This project contains the backend logic and frontend GUI for the TaskMind application, demonstrating core user management, task management, event scheduling, and AI features.
 
