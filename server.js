@@ -10,15 +10,20 @@ const nodemailer = require('nodemailer');
 const { addMinutes } = require('date-fns');
 const path = require('path'); // NEW: Required to serve HTML files
 
-// Configure Email (UPDATED: Force IPv4 for Render)
+// Configure Email (UPDATED: Port 587 + IPv4 + Debug)
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: 'smtp.gmail.com',
+  port: 587,
+  secure: false, // Must be false for port 587 (it upgrades to SSL automatically)
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS
   },
-  // This 'family: 4' option is the specific fix for cloud timeouts
-  family: 4 
+  family: 4, // Force IPv4 to avoid IPv6 timeouts
+  tls: {
+    rejectUnauthorized: false // Helps if Render has SSL cert issues
+  },
+  connectionTimeout: 10000 // Fail fast if it hangs
 });
 
 // 2. INITIALIZE APP
