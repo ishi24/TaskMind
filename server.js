@@ -10,13 +10,17 @@ const nodemailer = require('nodemailer');
 const { addMinutes } = require('date-fns');
 const path = require('path'); // NEW: Required to serve HTML files
 
-// Configure Email
+// Configure Email (UPDATED FOR RENDER)
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: 'smtp.gmail.com',
+  port: 465,
+  secure: true, // use SSL
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS
-  }
+  },
+  connectionTimeout: 10000, // 10 seconds
+  greetingTimeout: 10000    // 10 seconds
 });
 
 // 2. INITIALIZE APP
