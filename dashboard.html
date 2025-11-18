@@ -1,4 +1,3 @@
-<!-- File: dashboard.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -7,83 +6,212 @@
     <title>Dashboard - TaskMind</title>
     <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body class="app-page">
+    <!-- Top bar -->
     <nav class="navbar">
         <div class="navbar-container">
             <span class="navbar-brand">TaskMind</span>
             <div>
                 <span id="welcomeMessage">Welcome, ...</span>
+                <a href="settings.html" class="button" style="width:auto; margin-right:10px;">⚙️ Settings</a>
                 <button id="logoutButton" class="button button-danger">Logout</button>
             </div>
         </div>
     </nav>
-    
-    <div class="dashboard-container">
-        <h2>Your Dashboard</h2>
 
-        <!-- 🧠 AI Quick Add Form -->
-        <div class="form-container ai-form">
-            <form id="aiQuickAddForm">
-                <div class="form-group">
-                    <label for="aiInput">Natural Language Quick Add (Use Case 3)</label>
-                    <input type="text" id="aiInput" placeholder="e.g., Meet Sam next Tuesday 12-1 and prep docs">
-                </div>
-                <button type="submit" class="button">Go</button>
-                <div id="aiMessage" class="message"></div>
-                <!-- REMOVED: AI suggestions container -->
-            </form>
-        </div>
+    <!-- Sidebar + main content -->
+    <div class="app-shell">
+        <!-- Left "tabs" -->
+        <aside class="sidebar">
+            <div class="sidebar-logo">SECTIONS</div>
+            <nav class="sidebar-nav">
+                <a href="#section-task" class="sidebar-link">Create a New Task</a>
+                <a href="#section-event" class="sidebar-link">Create a New Event</a>
+                <a href="#section-email" class="sidebar-link">📧 AI Email Drafter</a>
+                <a href="#section-study" class="sidebar-link">📚 AI Study Planner</a>
+                <a href="settings.html" class="sidebar-link sidebar-link-secondary">Settings</a>
+            </nav>
+        </aside>
 
-        <div class="layout-grid">
-            
-            <div class="layout-column">
-                <div class="form-container">
-                    <form id="taskForm">
-                        <h3>Create a New Task</h3>
-                        <div class="form-group">
-                            <label for="taskTitle">Task Title</label>
-                            <input type="text" id="taskTitle" required>
+        <!-- Main content -->
+        <main class="app-main">
+            <!-- Overview + stats -->
+            <section class="dashboard-header" id="section-overview">
+                <h2>Your Dashboard</h2>
+
+                <div id="statsContainer">
+                    <div>
+                        <div>Completion Rate</div>
+                        <div style="font-size: 1.8rem; font-weight: bold;">
+                            <span id="statRate">0%</span>
                         </div>
-                        <button type="submit" class="button">Add Task</button>
-                        <div id="taskMessage" class="message"></div>
+                    </div>
+                    <div>
+                        <div>Current Streak</div>
+                        <div style="font-size: 1.8rem; font-weight: bold;">
+                            <span id="statStreak">0</span> Days 🔥
+                        </div>
+                    </div>
+                    <div>
+                        <div>Total Tasks</div>
+                        <div style="font-size: 1.8rem; font-weight: bold;">
+                            <span id="statTotal">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AI Quick Add -->
+                <div class="form-container ai-form">
+                    <form id="aiQuickAddForm">
+                        <div class="form-group">
+                            <label for="aiInput">Natural Language Quick Add (Use Case 3)</label>
+                            <input type="text" id="aiInput" placeholder="e.g., Meet Sam next Tuesday 12–1 and prep docs">
+                        </div>
+                        <button type="submit" class="button">Go</button>
+                        <div id="aiMessage" class="message"></div>
                     </form>
                 </div>
+            </section>
 
-                <div class="list-container">
-                    <h3>Your Tasks</h3>
-                    <div id="taskList"></div>
+            <!-- Tasks + Events -->
+            <section id="section-task">
+                <div class="layout-grid">
+                    <!-- Left column: tasks -->
+                    <div class="layout-column">
+                        <div class="form-container">
+                            <form id="taskForm">
+                                <h3>Create a New Task</h3>
+                                <div class="form-group">
+                                    <label for="taskTitle">Task Title</label>
+                                    <input type="text" id="taskTitle" required>
+                                </div>
+
+                                <div style="display:flex; gap:10px;">
+                                    <div class="form-group" style="flex:1;">
+                                        <label for="taskPriority">Priority</label>
+                                        <select id="taskPriority">
+                                            <option value="Low">Low</option>
+                                            <option value="Medium" selected>Medium</option>
+                                            <option value="High">High</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group" style="flex:1;">
+                                        <label for="taskDueDate">Due Date</label>
+                                        <input type="date" id="taskDueDate">
+                                    </div>
+                                </div>
+
+                                <button type="submit" class="button">Add Task</button>
+                                <div id="taskMessage" class="message"></div>
+                            </form>
+                        </div>
+
+                        <div class="list-container">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                                <h3 style="margin:0;">Your Tasks</h3>
+                                <button id="aiPrioritizeBtn" class="button" style="width:auto; font-size:0.9rem;">
+                                    ✨ AI Rank
+                                </button>
+                            </div>
+                            <div id="taskList"></div>
+                        </div>
+                    </div>
+
+                    <!-- Right column: events -->
+                    <div class="layout-column" id="section-event">
+                        <div class="form-container">
+                            <form id="eventForm">
+                                <h3>Create a New Event</h3>
+                                <div class="form-group">
+                                    <label for="eventTitle">Event Title</label>
+                                    <input type="text" id="eventTitle" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="startTime">Start Time</label>
+                                    <input type="datetime-local" id="startTime" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="endTime">End Time</label>
+                                    <input type="datetime-local" id="endTime" required>
+                                </div>
+                                <button type="submit" class="button">Add Event</button>
+                                <div id="eventMessage" class="message"></div>
+                            </form>
+                        </div>
+
+                        <div class="list-container">
+                            <h3>Your Events</h3>
+                            <div id="eventList"></div>
+                        </div>
+                    </div>
                 </div>
-            </div>
+            </section>
 
-            <div class="layout-column">
+            <!-- Email Drafter -->
+            <section id="section-email">
+                <div class="section-divider-title">📧 AI Email Drafter</div>
                 <div class="form-container">
-                    <form id="eventForm">
-                        <h3>Create a New Event</h3>
-                        <div class="form-group">
-                            <label for="eventTitle">Event Title</label>
-                            <input type="text" id="eventTitle" required>
+                    <div style="display:flex; gap:20px; align-items:flex-start;">
+                        <div style="flex:1;">
+                            <div class="form-group">
+                                <label>Recipient (Optional)</label>
+                                <input type="email" id="emailRecipient" placeholder="boss@company.com">
+                            </div>
+                            <div class="form-group">
+                                <label>What should this email say?</label>
+                                <textarea id="emailContext" rows="4" placeholder="e.g., Ask for a deadline extension on the Project X report until Friday because I'm sick."></textarea>
+                            </div>
+                            <button id="btnDraftEmail" class="button">✨ Draft Email</button>
                         </div>
-                        <div class="form-group">
-                            <label for="startTime">Start Time</label>
-                            <input type="datetime-local" id="startTime" required>
-                        </div>
-                        <div class="form-group">
-                            <label for="endTime">End Time</label>
-                            <input type="datetime-local" id="endTime" required>
-                        </div>
-                        <button type="submit" class="button">Add Event</button>
-                        <div id="eventMessage" class="message"></div>
-                        <!-- REMOVED: Event suggestions container -->
-                    </form>
-                </div>
 
-                <div class="list-container">
-                    <h3>Your Events</h3>
-                    <div id="eventList"></div>
+                        <div style="flex:1; border-left:1px solid #e5e7eb; padding-left:20px;">
+                            <div class="form-group">
+                                <label>Subject</label>
+                                <input type="text" id="emailSubjectResult">
+                            </div>
+                            <div class="form-group">
+                                <label>Body</label>
+                                <textarea id="emailBodyResult" rows="6"></textarea>
+                            </div>
+                            <div style="display:flex; gap:10px; margin-top:8px;">
+                                <a id="btnOpenMail" href="#" class="button" style="display:none; background:#22c55e;">🚀 Open App</a>
+                                <button id="btnSendRealEmail" class="button" style="display:none;">📨 Send Now</button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            </div>
+            </section>
 
-        </div>
+            <!-- Study Planner -->
+            <section id="section-study">
+                <div class="section-divider-title">📚 AI Study Planner</div>
+                <div class="form-container study-highlight">
+                    <p style="margin-top:0; font-size:0.9rem; color:#92400e;">
+                        Enter your exam details, and I'll fill your calendar with a revision schedule.
+                    </p>
+                    <div style="display:flex; gap:16px; align-items:flex-end; flex-wrap:wrap;">
+                        <div class="form-group" style="flex:1 1 180px;">
+                            <label>Subject / Exam Name</label>
+                            <input type="text" id="studySubject" placeholder="e.g. Calculus II Final">
+                        </div>
+
+                        <div class="form-group" style="flex:1 1 160px;">
+                            <label>Exam Date</label>
+                            <input type="date" id="studyExamDate">
+                        </div>
+
+                        <div class="form-group" style="flex:2 1 200px;">
+                            <label>Focus Areas (Optional)</label>
+                            <input type="text" id="studyFocus" placeholder="e.g. Integration, Series">
+                        </div>
+
+                        <button id="btnGeneratePlan" class="button" style="width:auto; min-width:140px;">
+                            Generate Plan
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </main>
     </div>
 
     <script src="main.js"></script>

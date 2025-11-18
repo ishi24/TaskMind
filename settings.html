@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - TaskMind</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body class="app-page">
+    <nav class="navbar">
+        <div class="navbar-container">
+            <span class="navbar-brand">TaskMind Settings</span>
+            <div>
+                <a href="dashboard.html" class="button" style="width:auto; background:#6c757d; margin-right:10px;">Back to Dashboard</a>
+                <button id="logoutButton" class="button button-danger">Logout</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <h2>Account Preferences</h2>
+
+        <div class="layout-grid">
+            <div class="layout-column">
+                
+                <div class="form-container">
+                    <h3>Profile Information</h3>
+                    <form id="profileForm">
+                        <div class="form-group">
+                            <label>Email (Cannot change)</label>
+                            <input type="email" id="settingsEmail" disabled style="background:#eee;">
+                        </div>
+                        <div class="form-group">
+                            <label>Full Name</label>
+                            <input type="text" id="settingsName" required>
+                        </div>
+                        <button type="submit" class="button">Update Profile</button>
+                        <div id="profileMessage" class="message"></div>
+                    </form>
+                </div>
+
+                <div class="form-container">
+                    <h3>Change Password</h3>
+                    <form id="passwordForm">
+                        <div class="form-group">
+                            <label>Current Password</label>
+                            <input type="password" id="oldPassword" required>
+                        </div>
+                        <div class="form-group">
+                            <label>New Password</label>
+                            <input type="password" id="newPassword" required>
+                        </div>
+                        <button type="submit" class="button button-secondary">Change Password</button>
+                        <div id="passwordMessage" class="message"></div>
+                    </form>
+                </div>
+
+            </div>
+
+            <div class="layout-column">
+                <div class="form-container">
+                    <h3>Integrations</h3>
+                    <p style="font-size:0.9rem; color:#666;">Connect external services to sync your tasks.</p>
+                    
+                    <div class="integration-item" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid #eee; padding-bottom:15px;">
+                        <div>
+                            <strong>Google Calendar</strong>
+                            <p style="margin:0; font-size:0.8rem; color:#888;">Sync events automatically</p>
+                        </div>
+                        <label class="switch">
+                            <input type="checkbox" id="toggleGoogle">
+                            <span style="cursor:pointer; color:#007bff;">Connect</span>
+                        </label>
+                    </div>
+
+                    <div class="integration-item" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid #eee; padding-bottom:15px;">
+                        <div>
+                            <strong>Microsoft Outlook</strong>
+                            <p style="margin:0; font-size:0.8rem; color:#888;">Import emails as tasks</p>
+                        </div>
+                        <label class="switch">
+                            <input type="checkbox" id="toggleOutlook">
+                            <span style="cursor:pointer; color:#007bff;">Connect</span>
+                        </label>
+                    </div>
+
+                    <div id="integrationMessage" class="message"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="main.js"></script>
+</body>
+</html>

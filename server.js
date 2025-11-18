@@ -6,6 +6,16 @@ const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const { GoogleGenAI } = require("@google/genai");
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const nodemailer = require('nodemailer');
+
+// Configure the Email Transporter
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS
+  }
+});
 
 // Only need addMinutes; no tz helpers required
 const { addMinutes } = require('date-fns');
@@ -157,20 +167,76 @@ app.post('/login', async (req, res) => {
   }
 });
 
-/** Use Case 3: Implement User.createTask() */
+/** Use Case 14: Update Profile (Name) */
+app.put('/users/:userId/profile', async (req, res) => {
+  try {
+    const { fullName } = req.body;
+    await dbPool.query('UPDATE users SET full_name = ? WHERE user_id = ?', [fullName, req.params.userId]);
+    res.status(200).json({ message: 'Profile updated successfully' });
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+/** Use Case 14: Change Password */
+app.put('/users/:userId/password', async (req, res) => {
+  const dbConnection = await dbPool.getConnection();
+  try {
+    const { oldPassword, newPassword } = req.body;
+    const userId = req.params.userId;
+
+    // 1. Get current hash
+    const [users] = await dbConnection.query('SELECT password_hash FROM users WHERE user_id = ?', [userId]);
+    if (users.length === 0) return res.status(404).json({ message: 'User not found' });
+
+    // 2. Verify Old Password
+    const isMatch = await bcrypt.compare(oldPassword, users[0].password_hash);
+    if (!isMatch) {
+        return res.status(401).json({ message: 'Incorrect current password' });
+    }
+
+    // 3. Hash New Password and Update
+    const newHash = await bcrypt.hash(newPassword, 10);
+    await dbConnection.query('UPDATE users SET password_hash = ? WHERE user_id = ?', [newHash, userId]);
+
+    res.status(200).json({ message: 'Password changed successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  } finally {
+    dbConnection.release();
+  }
+});
+
+/** Use Case 3 & 10: Create Task with Priority and Due Date */
 app.post('/tasks', async (req, res) => {
   try {
-    const { title, owner_user_id } = req.body;
+    // Extract new fields
+    const { title, owner_user_id, priority, dueDate } = req.body;
+    
     if (!title || !owner_user_id) {
       return res.status(400).json({ message: 'Task title and user ID are required.' });
     }
 
-    const sql = 'INSERT INTO tasks (title, owner_user_id, status) VALUES (?, ?, ?)';
-    const [result] = await dbPool.query(sql, [title, owner_user_id, 'todo']);
+    // Default values if not provided
+    const taskPriority = priority || 'Medium';
+    const taskDueDate = dueDate || null; // null allowed if no date picked
+
+    // Updated SQL to include priority and due_date
+    const sql = 'INSERT INTO tasks (title, owner_user_id, status, priority, due_date) VALUES (?, ?, ?, ?, ?)';
+    
+    const [result] = await dbPool.query(sql, [title, owner_user_id, 'todo', taskPriority, taskDueDate]);
 
     res.status(201).json({
       message: 'Task created successfully!',
-      task: { taskId: result.insertId, title, status: 'todo' }
+      // Return the full object so the UI can render it immediately
+      task: { 
+          taskId: result.insertId, 
+          title, 
+          status: 'todo', 
+          priority: taskPriority, 
+          due_date: taskDueDate 
+      }
     });
   } catch (error) {
     console.error('Error creating task:', error);
@@ -215,21 +281,26 @@ app.post('/events', async (req, res) => {
   }
 });
 
-/** NEW!! Use Case 10: Get User's Tasks */
+/** Use Case 10, 11, 12: Get Tasks (Owned + Assigned + Shared Status) */
 app.get('/tasks', async (req, res) => {
   try {
     const userId = req.query.userId;
     if (!userId) return res.status(400).json({ message: 'User ID is required.' });
 
     const sql = `
-      SELECT * FROM tasks
-      WHERE owner_user_id = ?
-      ORDER BY
-        COALESCE(parent_task_id, task_id),
-        parent_task_id IS NOT NULL,
-        created_at ASC
+      SELECT DISTINCT t.*, 
+             CASE WHEN t.owner_user_id = ? THEN 'owner' ELSE 'assignee' END as role,
+             (SELECT COUNT(*) FROM task_assignments ta WHERE ta.task_id = t.task_id) as assignment_count
+      FROM tasks t
+      LEFT JOIN task_assignments ta ON t.task_id = ta.task_id
+      WHERE t.owner_user_id = ? OR ta.assigned_to_user_id = ?
+      ORDER BY 
+        COALESCE(t.parent_task_id, t.task_id) DESC, 
+        t.due_date ASC
     `;
-    const [tasks] = await dbPool.query(sql, [userId]);
+    
+    // We pass userId 3 times now (for role check, owner check, assignee check)
+    const [tasks] = await dbPool.query(sql, [userId, userId, userId]);
     res.status(200).json(tasks);
   } catch (error) {
     console.error('Error fetching tasks:', error);
@@ -257,6 +328,86 @@ app.get('/events', async (req, res) => {
   }
 });
 
+/** Use Case 10: AI Prioritization (Fixed & Robust) */
+app.post('/tasks/ai-prioritize', async (req, res) => {
+  const { userId } = req.body;
+  const dbConnection = await dbPool.getConnection();
+
+  try {
+    // 1. Fetch all "todo" tasks
+    const [tasks] = await dbConnection.query(
+      'SELECT task_id, title, priority FROM tasks WHERE owner_user_id = ? AND status = "todo"', 
+      [userId]
+    );
+
+    if (tasks.length === 0) {
+      return res.status(200).json({ message: 'No tasks to rank.' });
+    }
+
+    // 2. Construct Prompt
+    const taskListString = JSON.stringify(tasks.map(t => ({ id: t.task_id, title: t.title })));
+
+    const prompt = `
+    You are a strict productivity manager. Analyze this list of tasks and assign a priority ('High', 'Medium', 'Low').
+    
+    Rules:
+    - "High": Urgent, deadlines, financial, critical.
+    - "Medium": Standard work/chores.
+    - "Low": Leisure, optional.
+    
+    Return ONLY a JSON object with a key "updates" containing an array of objects:
+    { "id": <number>, "priority": <string> }
+    
+    Tasks:
+    ${taskListString}
+    `;
+
+    // 3. Call Gemini
+    const { text: jsonText } = await callGeminiWithRetry({ prompt });
+    console.log("[AI Prioritize] Raw Response:", jsonText); // <--- LOGGING ADDED
+
+    let result;
+    try {
+         result = JSON.parse(jsonText);
+    } catch (e) {
+         // Sometimes AI adds markdown ```json ... ``` wrappers. Strip them.
+         const cleanText = jsonText.replace(/```json|```/g, '').trim();
+         result = JSON.parse(cleanText);
+    }
+
+    if (!result.updates || !Array.isArray(result.updates)) {
+      throw new Error("Invalid AI response format");
+    }
+
+    // 4. Update Database (with safeguards)
+    await dbConnection.beginTransaction();
+    
+    for (const update of result.updates) {
+        // Handle case sensitivity (priority vs Priority) or missing values
+        let p = update.priority || update.Priority || 'Medium';
+        
+        // Ensure strict capitalization for DB consistency
+        p = p.charAt(0).toUpperCase() + p.slice(1).toLowerCase(); 
+        if (!['High', 'Medium', 'Low'].includes(p)) p = 'Medium';
+
+        await dbConnection.query(
+            'UPDATE tasks SET priority = ? WHERE task_id = ?', 
+            [p, update.id]
+        );
+    }
+    
+    await dbConnection.commit();
+    res.status(200).json({ message: 'Tasks prioritized by AI!' });
+
+  } catch (error) {
+    try { await dbConnection.rollback(); } catch {}
+    console.error('AI Prioritize Error:', error);
+    res.status(500).json({ message: 'Failed to prioritize tasks.' });
+  } finally {
+    dbConnection.release();
+  }
+});
+
 /** NEW!! Use Case 10: Delete a Task (cascade children) */
 app.delete('/tasks/:taskId', async (req, res) => {
   const dbConnection = await dbPool.getConnection();
@@ -278,14 +429,28 @@ app.delete('/tasks/:taskId', async (req, res) => {
   }
 });
 
-/** NEW!! Use Case 10: Update a Task */
+/** Use Case 10 & 13: Update Task (Mark Done/Undone) */
 app.put('/tasks/:taskId', async (req, res) => {
   try {
     const taskId = req.params.taskId;
-    const { status } = req.body;
+    const { status } = req.body; // 'done' or 'todo'
+    
     if (!status) return res.status(400).json({ message: 'Status is required.' });
 
-    await dbPool.query('UPDATE tasks SET status = ? WHERE task_id = ?', [status, taskId]);
+    let sql;
+    let params;
+
+    if (status === 'done') {
+        // If marking done, save the CURRENT timestamp
+        sql = 'UPDATE tasks SET status = ?, completed_at = NOW() WHERE task_id = ?';
+        params = [status, taskId];
+    } else {
+        // If unchecking, clear the timestamp
+        sql = 'UPDATE tasks SET status = ?, completed_at = NULL WHERE task_id = ?';
+        params = [status, taskId];
+    }
+
+    await dbPool.query(sql, params);
     res.status(200).json({ message: 'Task updated successfully' });
   } catch (error) {
     console.error('Error updating task:', error);
@@ -502,6 +667,393 @@ Now, parse this text: "${text}"
     dbConnection.release();
   }
 });
+
+/** Use Case 7: Create Reminder */
+app.post('/tasks/:taskId/reminders', async (req, res) => {
+  try {
+    const taskId = req.params.taskId;
+    const { remindAt } = req.body; // Format: "YYYY-MM-DD HH:MM"
+
+    if (!remindAt) return res.status(400).json({ message: 'Reminder time is required.' });
+
+    // Insert into the 'task_reminders' table
+    const sql = 'INSERT INTO task_reminders (task_id, remind_at, status) VALUES (?, ?, ?)';
+    await dbPool.query(sql, [taskId, remindAt, 'pending']);
+
+    res.status(201).json({ message: 'Reminder set successfully!' });
+  } catch (error) {
+    console.error('Error setting reminder:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// --- BACKGROUND JOB: Reminder Checker ---
+// Checks for due reminders every 10 seconds
+setInterval(async () => {
+  try {
+    // Find reminders that are 'pending' AND whose time has passed (<= NOW())
+    const sql = `
+      SELECT r.reminder_id, t.title, r.remind_at 
+      FROM task_reminders r 
+      JOIN tasks t ON r.task_id = t.task_id 
+      WHERE r.status = 'pending' AND r.remind_at <= NOW()
+    `;
+    
+    const [dueReminders] = await dbPool.query(sql);
+
+    if (dueReminders.length > 0) {
+      console.log(`Found ${dueReminders.length} due reminders!`);
+      
+      for (const item of dueReminders) {
+        // 1. Trigger the Alert (Simulated for now)
+        console.log(`\n🔔🔔🔔 REMINDER ALERT 🔔🔔🔔`);
+        console.log(`Task: "${item.title}"`);
+        console.log(`Due at: ${item.remind_at}`);
+        console.log(`(Sending notification to user...)\n`);
+
+        // 2. Update status so we don't alert again
+        await dbPool.query(
+            "UPDATE task_reminders SET status = 'sent' WHERE reminder_id = ?", 
+            [item.reminder_id]
+        );
+      }
+    }
+  } catch (error) {
+    console.error("Reminder check error:", error);
+  }
+}, 10000); // Run every 10 seconds
+
+/** Use Case 8: AI Email Drafter */
+app.post('/ai-email-draft', async (req, res) => {
+  const { recipient, context, tone } = req.body; // e.g. "Professional", "Casual"
+  
+  try {
+    const prompt = `
+    You are an expert communication assistant. Write an email based on the following context.
+    
+    Recipient: ${recipient || "Unknown"}
+    Context/Goal: ${context}
+    Tone: ${tone || "Professional"}
+    
+    Return ONLY a JSON object with these keys:
+    - "subject": A clear, concise subject line.
+    - "body": The email body text (plain text, no markdown).
+    
+    Your JSON:
+    `;
+
+    const { text: jsonText } = await callGeminiWithRetry({ prompt });
+    console.log("[AI Email] Response:", jsonText);
+
+    let result;
+    try {
+        // Clean markdown if present
+        const cleanText = jsonText.replace(/```json|```/g, '').trim();
+        result = JSON.parse(cleanText);
+    } catch (e) {
+        throw new Error("AI returned invalid JSON");
+    }
+
+    res.status(200).json(result);
+
+  } catch (error) {
+    console.error("AI Email Error:", error);
+    res.status(500).json({ message: "Failed to draft email." });
+  }
+});
+
+/** Use Case 9: AI Study Planner */
+app.post('/ai-study-plan', async (req, res) => {
+  const { userId, subject, examDate, focusAreas } = req.body;
+  const dbConnection = await dbPool.getConnection();
+
+  try {
+    const today = new Date();
+    const exam = new Date(examDate);
+    const daysUntil = Math.ceil((exam - today) / (1000 * 60 * 60 * 24));
+
+    if (daysUntil <= 0) {
+      return res.status(400).json({ message: "Exam date must be in the future." });
+    }
+
+    const prompt = `
+    You are a strict academic tutor. Create a study plan for a student.
+    
+    Subject: "${subject}"
+    Focus Areas: "${focusAreas || 'General comprehensive review'}"
+    Days until exam: ${daysUntil}
+    Exam Date: ${examDate}
+    
+    Goal: Break this down into ${Math.min(daysUntil, 5)} - ${Math.min(daysUntil, 10)} distinct study tasks.
+    Spread the dates out starting from tomorrow up to the day before the exam.
+    
+    Return ONLY a JSON object with a key "plan" containing an array of objects.
+    Each object must have:
+    - "title": Actionable study task (e.g., "Review Chapter 1-3", "Practice Problems").
+    - "date": The specific date for this task (YYYY-MM-DD format).
+    
+    Your JSON:
+    `;
+
+    const { text: jsonText } = await callGeminiWithRetry({ prompt });
+    console.log("[AI Study Plan] Response:", jsonText);
+
+    let result;
+    try {
+        const cleanText = jsonText.replace(/```json|```/g, '').trim();
+        result = JSON.parse(cleanText);
+    } catch (e) {
+        throw new Error("AI returned invalid JSON");
+    }
+
+    if (!result.plan || !Array.isArray(result.plan)) {
+        throw new Error("Invalid plan format.");
+    }
+
+    // Save to Database
+    await dbConnection.beginTransaction();
+    
+    const sql = 'INSERT INTO tasks (owner_user_id, title, status, priority, due_date) VALUES ?';
+    // We default these tasks to "High" priority
+    const values = result.plan.map(item => [
+        userId, 
+        `📚 ${item.title}`, // Add emoji to distinguish study tasks
+        'todo', 
+        'High', 
+        item.date
+    ]);
+
+    if (values.length > 0) {
+        await dbConnection.query(sql, [values]);
+    }
+
+    await dbConnection.commit();
+    res.status(201).json({ message: `Generated ${values.length} study tasks!`, count: values.length });
+
+  } catch (error) {
+    try { await dbConnection.rollback(); } catch {}
+    console.error("AI Study Plan Error:", error);
+    res.status(500).json({ message: "Failed to generate plan." });
+  } finally {
+    dbConnection.release();
+  }
+});
+
+/** Use Case 12: Get Comments for a Task */
+app.get('/tasks/:taskId/comments', async (req, res) => {
+    try {
+        const [comments] = await dbPool.query(`
+            SELECT c.*, u.full_name 
+            FROM task_comments c
+            JOIN users u ON c.user_id = u.user_id
+            WHERE c.task_id = ?
+            ORDER BY c.created_at ASC
+        `, [req.params.taskId]);
+        res.status(200).json(comments);
+    } catch (error) {
+        res.status(500).json({ message: "Error fetching comments" });
+    }
+});
+
+/** Use Case 11 & 12: Assign Task to User */
+app.post('/tasks/:taskId/assign', async (req, res) => {
+  const { email } = req.body;
+  const taskId = req.params.taskId;
+
+  try {
+    // 1. Find the user ID by email
+    const [users] = await dbPool.query('SELECT user_id FROM users WHERE email = ?', [email]);
+    if (users.length === 0) {
+      return res.status(404).json({ message: 'User with that email not found.' });
+    }
+    const assigneeId = users[0].user_id;
+
+    // 2. Assign the task
+    // (Ignore duplicate errors if already assigned)
+    try {
+        await dbPool.query(
+            'INSERT INTO task_assignments (task_id, assigned_to_user_id) VALUES (?, ?)',
+            [taskId, assigneeId]
+        );
+    } catch (e) {
+        // If already assigned, just proceed
+    }
+
+    res.status(200).json({ message: `Task assigned to ${email}!` });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+/** Use Case 12: Add a Comment */
+app.post('/tasks/:taskId/comments', async (req, res) => {
+    try {
+        const { userId, text } = req.body;
+        if (!text) return res.status(400).json({ message: "Comment cannot be empty" });
+
+        await dbPool.query(
+            'INSERT INTO task_comments (task_id, user_id, comment_text) VALUES (?, ?, ?)',
+            [req.params.taskId, userId, text]
+        );
+        res.status(201).json({ message: "Comment added" });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: "Error saving comment" });
+    }
+});
+
+/** Use Case 13: Get Productivity Metrics */
+app.get('/analytics', async (req, res) => {
+    const { userId } = req.query;
+    if (!userId) return res.status(400).json({ message: "User ID required" });
+    
+    try {
+        // 1. Get total counts
+        const [counts] = await dbPool.query(`
+            SELECT 
+                COUNT(*) as total,
+                SUM(CASE WHEN status = 'done' THEN 1 ELSE 0 END) as completed
+            FROM tasks 
+            WHERE owner_user_id = ?
+        `, [userId]);
+
+        const total = counts[0].total || 0;
+        const completed = counts[0].completed || 0;
+        const completionRate = total === 0 ? 0 : Math.round((completed / total) * 100);
+
+        // 2. Calculate Streak (Complex Logic simplified)
+        // Fetch all unique dates where tasks were completed, ordered newest first
+        const [dates] = await dbPool.query(`
+            SELECT DISTINCT DATE(completed_at) as dateVal 
+            FROM tasks 
+            WHERE owner_user_id = ? AND status = 'done' AND completed_at IS NOT NULL
+            ORDER BY dateVal DESC
+        `, [userId]);
+
+        let streak = 0;
+        if (dates.length > 0) {
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            
+            // Check if the most recent completion was today or yesterday
+            const lastActive = new Date(dates[0].dateVal);
+            const diffDays = (today - lastActive) / (1000 * 60 * 60 * 24);
+
+            if (diffDays <= 1) {
+                streak = 1; // Started the streak
+                // Check previous days
+                for (let i = 0; i < dates.length - 1; i++) {
+                    const curr = new Date(dates[i].dateVal);
+                    const prev = new Date(dates[i+1].dateVal);
+                    // If gap is exactly 1 day, increment streak
+                    const gap = (curr - prev) / (1000 * 60 * 60 * 24);
+                    if (Math.round(gap) === 1) {
+                        streak++;
+                    } else {
+                        break; // Streak broken
+                    }
+                }
+            }
+        }
+
+        res.status(200).json({ 
+            total, 
+            completed, 
+            completionRate, 
+            streak 
+        });
+
+    } catch (error) {
+        console.error("Analytics Error:", error);
+        res.status(500).json({ message: "Server error" });
+    }
+});
+
+/** Use Case 15: Request Password Reset (REAL EMAIL) */
+app.post('/auth/forgot', async (req, res) => {
+  const { email } = req.body;
+  try {
+    const [users] = await dbPool.query('SELECT user_id FROM users WHERE email = ?', [email]);
+    if (users.length === 0) {
+        return res.status(200).json({ message: 'If that email exists, a code has been sent.' });
+    }
+
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    await dbPool.query('UPDATE users SET reset_token = ? WHERE email = ?', [code, email]);
+
+    // --- REAL EMAIL SENDING ---
+    const mailOptions = {
+      from: `"TaskMind Security" <${process.env.EMAIL_USER}>`,
+      to: email,
+      subject: 'Your Password Reset Code',
+      text: `Here is your recovery code for TaskMind: ${code}\n\nIf you did not request this, please ignore this email.`
+    };
+
+    await transporter.sendMail(mailOptions);
+    console.log(`Email sent to ${email}`);
+    // --------------------------
+
+    res.status(200).json({ message: 'Code sent to your email!' });
+  } catch (error) {
+    console.error("Email Error:", error);
+    res.status(500).json({ message: 'Failed to send email. Check server logs.' });
+  }
+});
+
+/** Use Case 8 (Extension): Send Drafted Email */
+app.post('/email/send', async (req, res) => {
+  const { to, subject, body } = req.body;
+
+  if (!to || !subject || !body) {
+      return res.status(400).json({ message: "Missing email fields." });
+  }
+
+  try {
+    const mailOptions = {
+      from: `"TaskMind Assistant" <${process.env.EMAIL_USER}>`, // Sender is YOU (the app)
+      to: to,
+      subject: subject,
+      text: body
+      // html: body.replace(/\n/g, '<br>') // Optional: If you wanted HTML emails
+    };
+
+    await transporter.sendMail(mailOptions);
+    res.status(200).json({ message: "Email sent successfully!" });
+
+  } catch (error) {
+    console.error("Send Error:", error);
+    res.status(500).json({ message: "Failed to send email." });
+  }
+});
+
+/** Use Case 15: Confirm Reset (Step 2) */
+app.post('/auth/reset', async (req, res) => {
+  const { email, code, newPassword } = req.body;
+  try {
+    // 1. Verify Code
+    const [users] = await dbPool.query('SELECT user_id FROM users WHERE email = ? AND reset_token = ?', [email, code]);
+    
+    if (users.length === 0) {
+        return res.status(400).json({ message: 'Invalid code or email.' });
+    }
+
+    // 2. Hash New Password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    // 3. Update Password and Clear Token
+    await dbPool.query(
+        'UPDATE users SET password_hash = ?, reset_token = NULL WHERE user_id = ?', 
+        [hashedPassword, users[0].user_id]
+    );
+
+    res.status(200).json({ message: 'Password reset successful! You can now login.' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 
 // 5. START THE SERVER
 app.listen(PORT, () => {

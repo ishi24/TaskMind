@@ -6,7 +6,7 @@
     <title>Login - TaskMind</title>
     <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body class="auth-page">
     <div class="form-container">
         <form id="loginForm">
             <h2>Login to TaskMind</h2>
@@ -24,7 +24,10 @@
             <button type="submit" class="button">Login</button>
             <div id="message" class="message"></div>
             
-            <p class="form-link">Don't have an account? <a href="signup.html">Sign up here</a></p>
+            <p class="form-link">
+                Don't have an account? <a href="signup.html">Sign up here</a><br>
+                <a href="reset.html" style="font-size: 0.9rem;">Forgot Password?</a>
+            </p>
         </form>
     </div>
     <script src="main.js"></script> 
