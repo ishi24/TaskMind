@@ -1,5 +1,5 @@
-// This is the URL of our running backend
-const API_URL = 'http://localhost:3001';
+// Automatically uses the current domain (works for localhost AND taskmindofficial.com)
+const API_URL = window.location.origin;
 
 // We get the current page's path to decide which logic to run
 const currentPage = window.location.pathname;
@@ -960,4 +960,30 @@ async function setupDashboard() {
     await fetchTasks();
     await fetchEvents();
     await updateStats();
+    // --- NEW: Reminder Poller ---
+    // check every 15 seconds
+    setInterval(async () => {
+        try {
+            const res = await fetch(`${API_URL}/reminders/check?userId=${user.userId}`);
+            const reminders = await res.json();
+
+            if (reminders.length > 0) {
+                // 1. Show Browser Notification/Alert
+                reminders.forEach(r => {
+                    // You can make this a fancy modal later, for now standard alert:
+                    alert(`🔔 REMINDER: ${r.title}\nDue at: ${new Date(r.remind_at).toLocaleTimeString()}`);
+                });
+
+                // 2. Tell server we saw them
+                const ids = reminders.map(r => r.reminder_id);
+                await fetch(`${API_URL}/reminders/ack`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ reminderIds: ids })
+                });
+            }
+        } catch (e) {
+            console.error("Reminder poll failed", e);
+        }
+    }, 15000);
 }
