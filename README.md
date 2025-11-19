@@ -1,6 +1,8 @@
 # TaskMind - AI-Powered Intelligent Productivity Suite
 
-TaskMind is a comprehensive, full-stack productivity application designed to demonstrate the integration of Generative AI into daily task management. Beyond standard CRUD operations, TaskMind leverages Google's Gemini API to parse natural language, prioritize tasks, draft emails, decompose complex projects, and generate study schedules automatically.
+**[🚀 Launch Live App](https://taskmind-gwce.onrender.com/)**
+
+TaskMind is a comprehensive, full-stack productivity SaaS designed to integrate Generative AI into daily task management. Hosted on the cloud, it leverages Google's Gemini API to parse natural language, prioritize tasks, draft emails, decompose complex projects, and generate study schedules automatically.
 
 ## 1. Features & Capabilities
 
@@ -18,7 +20,7 @@ TaskMind is a comprehensive, full-stack productivity application designed to dem
 
 ### ⚡ Productivity & Metrics
 * **Dashboard Analytics:** Visual "Streak" counter, Task Completion Rate, and Total Task counts to gamify productivity.
-* **Smart Reminders:** Set specific reminder times. The server runs a background job to alert you (via terminal logs) when a task is due.
+* **Smart Reminders:** Set specific reminder times. The server runs a background job to alert you via browser notifications when a task is due.
 * **Calendar Integration:** View events sorted chronologically.
 
 ### 🔐 Security & User Management
@@ -30,34 +32,36 @@ TaskMind is a comprehensive, full-stack productivity application designed to dem
 
 * **Frontend:** HTML5, CSS3, Vanilla JavaScript (Fetch API).
 * **Backend:** Node.js, Express.js.
-* **Database:** MySQL 8.0 (AWS RDS or Local).
+* **Database:** MySQL 8.0 (Hosted on AWS RDS).
 * **AI Engine:** Google Gemini API (`@google/genai`).
 * **Email Service:** Nodemailer (Gmail SMTP).
-* **Key Libraries:** `mysql2`, `bcryptjs`, `cors`, `dotenv`, `date-fns`, `nodemailer`.
+* **Deployment:** Render (Cloud Hosting).
 
-## 3. Database Schema Overview
-The application uses a relational MySQL database with the following key tables:
-* `users`: Stores credentials, profile info, and reset tokens.
-* `tasks`: Stores task details, priority, due dates, and completion status.
-* `events`: Stores calendar events with start/end times.
-* `task_assignments`: Manages logic for shared tasks between users.
-* `task_comments`: Stores collaboration history.
-* `task_reminders`: Tracks pending alerts for the background worker.
+## 3. How to Use the App
 
-## 4. Installation & Setup
+1.  **Access the Site:** Go to [https://taskmind-gwce.onrender.com/](https://taskmind-gwce.onrender.com/).
+    * *Note: If the site loads slowly initially, please wait ~30 seconds. The free-tier server sleeps when inactive.*
+2.  **Sign Up:** Create a new account.
+3.  **Test AI:** Try typing *"Lunch with client tomorrow at 12pm"* in the top bar and click **Go**.
+4.  **Collaborate:** Create a task, click the **👤** icon, and assign it to another email address.
+5.  **Plan Studies:** Scroll to the "Study Planner" section, enter a subject (e.g., "History Final"), pick a date, and click **Generate**.
+
+## 4. Local Development Setup
+
+If you wish to run this code on your local machine instead of the cloud, follow these steps:
 
 ### Prerequisites
-1.  **Node.js** (LTS version).
-2.  **MySQL Database** (Local or Cloud/AWS).
-3.  **Google Gemini API Key** (Get it from Google AI Studio).
-4.  **Gmail Account** with "App Password" enabled (for sending emails).
+* Node.js (LTS version).
+* Access to a MySQL database (Local or AWS).
+* A Google Gemini API Key.
+* A Gmail Account with an App Password (for email features).
 
 ### Step-by-Step Setup
 
 1.  **Clone the Repository**
     ```bash
-    git clone [https://github.com/yourusername/taskmind.git](https://github.com/yourusername/taskmind.git)
-    cd taskmind
+    git clone [https://github.com/ishi24/TaskMind.git](https://github.com/ishi24/TaskMind.git)
+    cd TaskMind
     ```
 
 2.  **Install Dependencies**
@@ -69,40 +73,24 @@ The application uses a relational MySQL database with the following key tables:
     Create a `.env` file in the root directory and add your credentials:
     ```env
     # Database Configuration
-    DB_HOST=your_db_host
-    DB_USER=your_db_user
+    DB_HOST=your_db_host_endpoint
+    DB_USER=your_db_username
     DB_PASSWORD=your_db_password
     DB_DATABASE=taskmind_db
 
     # AI Configuration
     GEMINI_API_KEY=your_gemini_api_key
 
-    # Email Configuration (Required for Reset Password & Email Sending)
+    # Email Configuration
     EMAIL_USER=your_email@gmail.com
     EMAIL_PASS=your_16_char_app_password
     ```
 
-4.  **Database Setup**
-    Ensure your MySQL database has the required tables (`users`, `tasks`, `events`, `calendars`, `task_assignments`, `task_comments`, `task_reminders`).
-    *(Refer to the provided SQL schema diagrams or scripts if available).*
-
-## 5. Running the Application
-
-1.  **Start the Backend Server**
-    The server handles API requests and runs the background reminder checker.
+4.  **Run the Server**
     ```bash
     node server.js
     ```
-    *Output should confirm:* `✅ Backend server is running...`
+    (Look for `✅ Backend server running...`)
 
-2.  **Launch the Frontend**
-    Open `index.html` in your browser.
-    *Tip: For best results, use VS Code's "Live Server" extension.*
-
-## 6. Usage Guide (How to Test Features)
-
-1.  **AI Quick Add:** In the dashboard, type *"Lunch with Mom tomorrow at 12pm"* into the top bar and hit Go.
-2.  **Collaboration:** Create a task, click the **👤** icon, and enter another registered user's email to share the task.
-3.  **AI Study Plan:** Go to the bottom yellow section, enter "Biology Final" and a date. Watch the AI fill your task list.
-4.  **Email Drafter:** Scroll to the "AI Email Drafter". Enter a recipient and a prompt (e.g., "Ask for a sick day"). Click **Draft** -> **Send Now**.
-5.  **Reminders:** Click the **🔔** icon on a task. Set a time 1 minute from now. Watch your VS Code terminal to see the alert pop up!
+5.  **Launch Frontend**
+    Open `http://localhost:3001` in your browser.
