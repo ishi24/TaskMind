@@ -6,22 +6,51 @@ const cors = require('cors');
 const bcrypt = require('bcryptjs');
 const { GoogleGenAI } = require("@google/genai");
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-const nodemailer = require('nodemailer');
 const { addMinutes } = require('date-fns');
 const path = require('path'); // NEW: Required to serve HTML files
 
-// Configure Email (UPDATED FOR RENDER)
-const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 465,
-  secure: true, // use SSL
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  },
-  connectionTimeout: 10000, // 10 seconds
-  greetingTimeout: 10000    // 10 seconds
+const { google } = require('googleapis'); // NEW IMPORT
+
+// --- GMAIL API CLIENT SETUP (Replaces Nodemailer) ---
+const oauth2Client = new google.auth.OAuth2(
+  process.env.GMAIL_CLIENT_ID,
+  process.env.GMAIL_CLIENT_SECRET,
+  "https://developers.google.com/oauthplayground"
+);
+
+oauth2Client.setCredentials({
+  refresh_token: process.env.GMAIL_REFRESH_TOKEN
 });
+
+const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
+
+// --- HELPER: Send Email via Gmail API ---
+async function sendGmail(to, subject, textBody) {
+  // 1. Create raw email string (RFC 2822)
+  const messageParts = [
+    `From: TaskMind <${process.env.EMAIL_USER}>`,
+    `To: ${to}`,
+    'Content-Type: text/plain; charset=utf-8',
+    'MIME-Version: 1.0',
+    `Subject: ${subject}`,
+    '',
+    textBody
+  ];
+  const message = messageParts.join('\n');
+
+  // 2. Encode string to Base64URL
+  const encodedMessage = Buffer.from(message)
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+
+  // 3. Send via Google
+  await gmail.users.messages.send({
+    userId: 'me',
+    requestBody: { raw: encodedMessage }
+  });
+}
 
 // 2. INITIALIZE APP
 const app = express();
@@ -999,9 +1028,14 @@ app.post('/auth/forgot', async (req, res) => {
       text: `Here is your recovery code for TaskMind: ${code}\n\nIf you did not request this, please ignore this email.`
     };
 
-    await transporter.sendMail(mailOptions);
+    // --- REAL EMAIL SENDING (Gmail API) ---
+    await sendGmail(
+        email, 
+        'Your Password Reset Code', 
+        `Here is your recovery code for TaskMind: ${code}\n\nIf you did not request this, please ignore this email.`
+    );
     console.log(`Email sent to ${email}`);
-    // --------------------------
+    // --------------------------------------
 
     res.status(200).json({ message: 'Code sent to your email!' });
   } catch (error) {
@@ -1027,8 +1061,10 @@ app.post('/email/send', async (req, res) => {
       // html: body.replace(/\n/g, '<br>') // Optional: If you wanted HTML emails
     };
 
-    await transporter.sendMail(mailOptions);
-    res.status(200).json({ message: "Email sent successfully!" });
+    // --- REAL EMAIL SENDING (Gmail API) ---
+    await sendGmail(to, subject, body);
+    res.status(200).json({ message: "Email sent successfully via Gmail API!" });
+    // --------------------------------------
 
   } catch (error) {
     console.error("Send Error:", error);
